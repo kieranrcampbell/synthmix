@@ -110,15 +110,15 @@ class CreateMix:
 			self.cells_per_type[directory] = len(self.cell_fastq_dict[directory])
 
 		if self.paired_end:
-			assert np.any(np.array(self.cells_per_type.values()) % 2 == 0), "Paired end reads must have even number of fastq.gz files"
-			for(dir, n_cells) in self.cells_per_type.iteritems():
+			assert np.any(np.array(list(self.cells_per_type.values())) % 2 == 0), "Paired end reads must have even number of fastq.gz files"
+			for(dir, n_cells) in self.cells_per_type.items():
 				self.cells_per_type[dir] = n_cells / 2			
 
 
 	def  _find_paired_ends(self):
 		""" Iterates over self.cell_fastq_dict and sorts files into pairs based on _1 and _2 """
 
-		for celltype, fastq_list in self.cell_fastq_dict.iteritems():
+		for celltype, fastq_list in self.cell_fastq_dict.items():
 			forward_strand = [x for x in fastq_list if "_1" in x]
 			reverse_strand = [x for x in fastq_list if "_2" in x]
 
@@ -158,7 +158,7 @@ class CreateMix:
 			"""
 
 			# need to count lines in fastq files
-			for (dir, cells) in self.cell_dict.iteritems():
+			for (dir, cells) in self.cell_dict.items():
 				sizes = []
 				for cell in cells:
 					if self.paired_end:
@@ -220,7 +220,8 @@ class CreateMix:
 			
 
 			""" now select reads_per_cell from n_lines """
-			chosen_lines = np.random.choice(n_lines / 4,  reads_per_cell) * 4
+
+			chosen_lines = np.random.choice(int(n_lines / 4),  int(reads_per_cell)) * 4
 
 			for l in chosen_lines:
 				[outfilestream[i].writelines(lines[i][l:(l+4)]) for i in (0,1)]
