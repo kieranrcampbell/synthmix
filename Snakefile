@@ -81,7 +81,7 @@ fastq_strand_2 = [c[1] for type in cells_fastq_path for c in type]
 
 #----- Snakemake stuff starts here
 
-INDEX = config["index"]
+INDEX = config["kallisto_index"]
 
 rule buildkallistoindex:
 	input:
