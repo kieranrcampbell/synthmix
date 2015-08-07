@@ -34,13 +34,20 @@ if not "bulk_build" in config.keys():
 	config["bulk_build"] = os.path.join(config["base_dir"], "bulkbuild")
 if not "bulk_output_dir" in config.keys():
 	config["bulk_output_dir"] = os.path.join(config["base_dir"], "boutput")
+if not "uniform_over_celltypes"] in config.keys():
+	config["uniform_over_celltypes"] = True
 
 
 #--------------- Bulding bulks from single cell
 
 kallisto_output_files = ['abundance.h5', 'abundance.txt', 'run_info.json']
 
-bulk_name = '_'.join([str(m) for m in config["mix_ratio"]]).replace('.','')
+bulk_name = ""
+if "prefix" in config.keys():
+	bulk_name = config["prefix"]
+
+bulk_name = str(config["depth"]) + "_"
+bulk_name += '_'.join([str(m) for m in config["mix_ratio"]]).replace('.','')
 bulk_file_for_createmix = os.path.join(config["bulk_build"], "bulk" + bulk_name + ".fastq.gz")
 bulk_fastq_files = [bulk_file_for_createmix.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
 
@@ -101,7 +108,8 @@ rule buildbulk:
 
 	run:
 		cm = CreateMix(scdirs, config["mix_ratio"], config["depth"], 
-			bulk_file_for_createmix)
+			bulk_file_for_createmix, paired_end = True, 
+			uniform_over_celltypes = config["uniform_over_celltypes"])
 		cm.cellIO()
 
 rule quantifysc:

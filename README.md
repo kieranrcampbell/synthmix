@@ -36,7 +36,6 @@ This requires the following fields:
 * `transcript_index`: The transcriptome index required by Kallisto
 * `kallisto_index`: The pseudoalignment index built by Kallisto (this is created as the first step of Synthmix)
 
-
 Then call 
 ```bash
 snakemake --configfile synthmix_conf.json
@@ -45,10 +44,22 @@ Note that any option can also be passed to synthmix through snakemake's built in
 ```bash
 snakemake --configfile synthmix_conf.json --config depth=100
 ```
+By default bulk fastqs are built in a directory called `bulkbuild`, while bulk and single- kallisto quantification output is put in the directories `boutput` and `scoutput` respectively. These can
+be changed using the config options `bulk_build`, `sc_output_dir` and `bulk_output_dir`.
+
+Bulk fastqs are built in the format a_b1_b2_s.fastq.gz, where a is the read depth, b1 and b2 are the mixing ratios (can go on to any number) and s is the strand (1 or 2), e.g. 1000_02_08_1.fastq.gz for a bulk sample at a depth of 1000 with mixing proportions of 0.2 and 0.8 respectively.
 
 ## Advanced
 
 ### Options for Synthmix output directories
+
+Synthmix treats bulk output of identical depth and mixing proportions as the same to avoid re-builds. However, you may wish to produce replicates of the same parameters. To acheive this, specify "prefix" in the configuration and add a unique identifier to force a rebuild under a different name, e.g.
+
+```bash
+snakemake --configfile synthmix_conf.json --config prefix=build1
+snakemake --configfile synthmix_conf.json --config prefix=build2
+```
+will create two bulk outputs with the same parameters but with build1 and build2 prepended to differentiate between them (the resultant files will be something like `build1_1000_02_08_1.fastq.gz` for read depth 1000, mixing proportions 0.2 and 0.8 and the first strand).
 
 ### Options for bulk data synthesis
 
