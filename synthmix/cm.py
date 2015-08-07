@@ -81,13 +81,13 @@ class CreateMix:
 			self._trim_dict()
 			self.output_file = [self.output_file]
 
-		print('Finding number of cells')
+		print('[CreateMix] Finding number of cells')
 		self._get_ncells()
-		print('Finding paired ends')
+		print('[CreateMix] Finding paired ends')
 		self._find_paired_ends()
-		print('Calculating reads per cell')
+		print('[CreateMix] Calculating reads per cell')
 		self._find_reads_per_cell(uniform_over_celltypes)
-		print('Init done')
+		
 
 	def _check_inputs(self, cell_directories, mixing_coefficients):
 
@@ -191,7 +191,7 @@ class CreateMix:
 
 
 	def cellIO(self):
-
+		print("[CreateMix]  Writing files")
 		outfilestreams = [gzip.open(f,'wb') for f in self.output_file]
 
 		for cell_type in self.cell_dirs:
@@ -203,6 +203,7 @@ class CreateMix:
 
 
 		[f.close() for f in outfilestreams]
+		print("[CreateMix] Done")
 
 	def _write_one_cell(self, directory, cell_file, reads_per_cell, outfilestream):
 		""" select reads_per_cell reads at random from cell file in directory, and output

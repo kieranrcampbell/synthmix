@@ -29,41 +29,45 @@ def unique(seq, idfun=None):
 KALLISTO_DIR = "/net/isi-scratch/kieran/tools/kallisto_linux-v0.42.1/"
 KALLISTO = os.path.join(KALLISTO_DIR, "kallisto")
 
-BASE_DIR = "/net/isi-project/CW010_CAMPBELL_SCNGEN/data/admix/monocle/"
+synthmix_conf = {
+	"base_dir": "/net/isi-project/CW010_CAMPBELL_SCNGEN/data/admix/monocle/",
+	"index": "kallisto_files/transcripts.idx",
+	"scdirs": ["type2","type3"],
+	"mix_ratio": [.1, .9],
+	"depth": 1000,
+	"transcript_index": "kallisto_files/transcripts.fasta.gz"
+	}
 
-INDEX = "kallisto_files/transcripts.idx"
+if not "sc_output_dir" in synthmix_conf.keys():
+	synthmix_conf["sc_output_dir"] = os.path.join(synthmix_conf["base_dir"], "scoutput")
+if not "bulk_build" in synthmix_conf.keys():
+	synthmix_conf["bulk_build"] = os.path.join(synthmix_conf["base_dir"], "bulkbuild")
+if not "bulk_output_dir" in synthmix_conf.keys():
+	synthmix_conf["bulk_output_dir"] = os.path.join(synthmix_conf["base_dir"], "boutput")
 
-SCDIRS = ["type2","type3"]
-SC_OUTPUT_DIR = os.path.join(BASE_DIR, "scoutput")
 
-BULK_BUILD = os.path.join(BASE_DIR, "bulkbuild")
-MIX_RATIO = [.2, .8]
-
-BULK_OUTPUT_DIR = os.path.join(BASE_DIR, "boutput")
-
-DEPTH = 1000
-
-#----- Bulding bulks from single cell
+#--------------- Bulding bulks from single cell
 
 kallisto_output_files = ['abundance.h5', 'abundance.txt', 'run_info.json']
 
-bulk_name = '_'.join([str(m) for m in MIX_RATIO]).replace('.','')
-bulk_file_for_createmix = os.path.join(BULK_BUILD, "bulk" + bulk_name + ".fastq.gz")
-bulk_files_for_output = [bulk_file_for_createmix.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
-
-#----- Bulk Quantification
-
-bulk_quant_dir = os.path.join(BULK_OUTPUT_DIR, strmixrat) # bulk estimate directory
-bulk_quant_files = [os.path.join(bulk_quant_dir, kof) for kof in kallisto_output_files] # bulk estimate files
-
-scdirs = [os.path.join(BASE_DIR, sc) for sc in SCDIRS] # location of single-cell fastqs, also used in quant
+bulk_name = '_'.join([str(m) for m in synthmix_conf["mix_ratio"]]).replace('.','')
+bulk_file_for_createmix = os.path.join(synthmix_conf["bulk_build"], "bulk" + bulk_name + ".fastq.gz")
+bulk_fastq_files = [bulk_file_for_createmix.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
 
 # complete list of all single-cell fastqs - output of build bulk and input to sc quant
-cells_full_path = [f for DIR in scdirs for f in glob.glob(DIR + '/*_*.fastq.gz')]
 
-#----- SIngle-cell quantification
+scdirs = [os.path.join(synthmix_conf["base_dir"], sc) for sc in synthmix_conf["scdirs"]] # location of single-cell fastqs, also used in quant
+cells_full_path = [f for dir in scdirs for f in glob.glob(dir + '/*_*.fastq.gz')]
 
-odirs = [os.path.join(SC_OUTPUT_DIR, sc) for sc in SCDIRS] # output directories for sc quant
+#--------------- Bulk Quantification
+
+bulk_quant_dir = os.path.join(synthmix_conf["bulk_output_dir"], bulk_name) # bulk estimate directory
+bulk_quant_files = [os.path.join(bulk_quant_dir, kof) for kof in kallisto_output_files] # bulk estimate files
+
+
+#--------------- SIngle-cell quantification
+
+odirs = [os.path.join(synthmix_conf["sc_output_dir"], sc) for sc in synthmix_conf["scdirs"]] # output directories for sc quant
 
 # list of lists - inner corresponds to filenames belonging to a given cell type (outer)
 cells = [unique([os.path.basename(f).split('_')[0] for f in glob.glob(d + "/*_*.fastq.gz")]) for d in scdirs]
@@ -77,7 +81,7 @@ cells_fastq_path = [ [ [os.path.join(scdirs[i], cells[i][j] + "_" + str(k + 1) +
 # list of output directories corresponding to each cell types
 odirs_cell_level = [[os.path.join(odirs[i], cells[i][j]) for j in range(len(cells[i]))] for i in range(len(odirs))]
 
-all_output_files = [os.path.join(outdir, kof) for celltype in odirs_cell_level \ 
+sc_all_output_files = [os.path.join(outdir, kof) for celltype in odirs_cell_level \ 
 for outdir in celltype for kof in kallisto_output_files] # complete list of all files generated in sc quant
 
 # flatten out structure
@@ -87,11 +91,13 @@ fastq_strand_2 = [c[1] for type in cells_fastq_path for c in type]
 
 #----- Snakemake stuff starts here
 
+INDEX = synthmix_conf["index"]
+
 rule buildkallistoindex:
 	input:
-		"kallisto_files/transcripts.fasta.gz"
+		synthmix_conf["transcript_index"]
 	output:
-		{INDEX}		
+		INDEX
 	shell:
 		"{KALLISTO} index -i {output} {input}"
 
@@ -101,26 +107,33 @@ rule buildbulk:
 		cells_full_path
 
 	output:
-		bulk_files_for_output
+		bulk_fastq_files
 
 	run:
-		cm = CreateMix(scdirs, MIX_RATIO, DEPTH, bulk_file_for_createmix)
+		cm = CreateMix(scdirs, synthmix_conf["mix_ratio"], synthmix_conf["depth"], 
+			bulk_file_for_createmix)
 		cm.cellIO()
 
 rule quantifysc:
 	input:
 		cells_full_path
 	output:
-		all_output_files
+		sc_all_output_files
 	run:
-		for output, s1, s2 in zip(shell_output_file_list, fastq_strand_1, fastq_strand_1):
+		for output, s1, s2 in zip(shell_output_file_list, fastq_strand_1, fastq_strand_2):
 			shell("{KALLISTO} quant -i {INDEX} -o {output} {s1} {s2}")
 
 
 rule quantifybulk:
 	input:
-		bulk_files_for_output
+		bulk_fastq_files
 	output:
-		kallisto_output_files
-	rule:
-		# same as quantifysc
+		bulk_quant_files
+	shell:
+		"{KALLISTO} quant -i {INDEX} -o {bulk_quant_dir} {bulk_fastq_files[0]} {bulk_fastq_files[1]}"
+
+rule all:
+	input:
+		sc_all_output_files,
+		bulk_quant_files
+		
