@@ -1,0 +1,9 @@
+
+{
+	"base_dir": "/net/isi-project/CW010_CAMPBELL_SCNGEN/data/admix/monocle/",
+	"index": "kallisto_files/transcripts.idx",
+	"scdirs": ["type2","type3"],
+	"mix_ratio": [0.1, 0.9],
+	"depth": 1000,
+	"transcript_index": "kallisto_files/transcripts.fasta.gz"
+}

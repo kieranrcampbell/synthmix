@@ -25,49 +25,39 @@ def unique(seq, idfun=None):
        result.append(item)
    return result
 
-## User required fields
-KALLISTO_DIR = "/net/isi-scratch/kieran/tools/kallisto_linux-v0.42.1/"
-KALLISTO = os.path.join(KALLISTO_DIR, "kallisto")
+# exec(open("config.py").read()) # read in config
 
-synthmix_conf = {
-	"base_dir": "/net/isi-project/CW010_CAMPBELL_SCNGEN/data/admix/monocle/",
-	"index": "kallisto_files/transcripts.idx",
-	"scdirs": ["type2","type3"],
-	"mix_ratio": [.1, .9],
-	"depth": 1000,
-	"transcript_index": "kallisto_files/transcripts.fasta.gz"
-	}
 
-if not "sc_output_dir" in synthmix_conf.keys():
-	synthmix_conf["sc_output_dir"] = os.path.join(synthmix_conf["base_dir"], "scoutput")
-if not "bulk_build" in synthmix_conf.keys():
-	synthmix_conf["bulk_build"] = os.path.join(synthmix_conf["base_dir"], "bulkbuild")
-if not "bulk_output_dir" in synthmix_conf.keys():
-	synthmix_conf["bulk_output_dir"] = os.path.join(synthmix_conf["base_dir"], "boutput")
+if not "sc_output_dir" in config.keys():
+	config["sc_output_dir"] = os.path.join(config["base_dir"], "scoutput")
+if not "bulk_build" in config.keys():
+	config["bulk_build"] = os.path.join(config["base_dir"], "bulkbuild")
+if not "bulk_output_dir" in config.keys():
+	config["bulk_output_dir"] = os.path.join(config["base_dir"], "boutput")
 
 
 #--------------- Bulding bulks from single cell
 
 kallisto_output_files = ['abundance.h5', 'abundance.txt', 'run_info.json']
 
-bulk_name = '_'.join([str(m) for m in synthmix_conf["mix_ratio"]]).replace('.','')
-bulk_file_for_createmix = os.path.join(synthmix_conf["bulk_build"], "bulk" + bulk_name + ".fastq.gz")
+bulk_name = '_'.join([str(m) for m in config["mix_ratio"]]).replace('.','')
+bulk_file_for_createmix = os.path.join(config["bulk_build"], "bulk" + bulk_name + ".fastq.gz")
 bulk_fastq_files = [bulk_file_for_createmix.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
 
 # complete list of all single-cell fastqs - output of build bulk and input to sc quant
 
-scdirs = [os.path.join(synthmix_conf["base_dir"], sc) for sc in synthmix_conf["scdirs"]] # location of single-cell fastqs, also used in quant
+scdirs = [os.path.join(config["base_dir"], sc) for sc in config["scdirs"]] # location of single-cell fastqs, also used in quant
 cells_full_path = [f for dir in scdirs for f in glob.glob(dir + '/*_*.fastq.gz')]
 
 #--------------- Bulk Quantification
 
-bulk_quant_dir = os.path.join(synthmix_conf["bulk_output_dir"], bulk_name) # bulk estimate directory
+bulk_quant_dir = os.path.join(config["bulk_output_dir"], bulk_name) # bulk estimate directory
 bulk_quant_files = [os.path.join(bulk_quant_dir, kof) for kof in kallisto_output_files] # bulk estimate files
 
 
 #--------------- SIngle-cell quantification
 
-odirs = [os.path.join(synthmix_conf["sc_output_dir"], sc) for sc in synthmix_conf["scdirs"]] # output directories for sc quant
+odirs = [os.path.join(config["sc_output_dir"], sc) for sc in config["scdirs"]] # output directories for sc quant
 
 # list of lists - inner corresponds to filenames belonging to a given cell type (outer)
 cells = [unique([os.path.basename(f).split('_')[0] for f in glob.glob(d + "/*_*.fastq.gz")]) for d in scdirs]
@@ -91,15 +81,15 @@ fastq_strand_2 = [c[1] for type in cells_fastq_path for c in type]
 
 #----- Snakemake stuff starts here
 
-INDEX = synthmix_conf["index"]
+INDEX = config["index"]
 
 rule buildkallistoindex:
 	input:
-		synthmix_conf["transcript_index"]
+		config["transcript_index"]
 	output:
 		INDEX
 	shell:
-		"{KALLISTO} index -i {output} {input}"
+		"kallisto index -i {output} {input}"
 
 
 rule buildbulk:
@@ -110,7 +100,7 @@ rule buildbulk:
 		bulk_fastq_files
 
 	run:
-		cm = CreateMix(scdirs, synthmix_conf["mix_ratio"], synthmix_conf["depth"], 
+		cm = CreateMix(scdirs, config["mix_ratio"], config["depth"], 
 			bulk_file_for_createmix)
 		cm.cellIO()
 
@@ -121,7 +111,7 @@ rule quantifysc:
 		sc_all_output_files
 	run:
 		for output, s1, s2 in zip(shell_output_file_list, fastq_strand_1, fastq_strand_2):
-			shell("{KALLISTO} quant -i {INDEX} -o {output} {s1} {s2}")
+			shell("kallisto quant -i {INDEX} -o {output} {s1} {s2}")
 
 
 rule quantifybulk:
@@ -130,7 +120,7 @@ rule quantifybulk:
 	output:
 		bulk_quant_files
 	shell:
-		"{KALLISTO} quant -i {INDEX} -o {bulk_quant_dir} {bulk_fastq_files[0]} {bulk_fastq_files[1]}"
+		"kallisto quant -i {INDEX} -o {bulk_quant_dir} {bulk_fastq_files[0]} {bulk_fastq_files[1]}"
 
 rule all:
 	input:
