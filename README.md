@@ -34,6 +34,12 @@ This requires the following fields:
 
 
 Then call 
-`snakemake --configfile synthmix_conf.json`
+```bash
+snakemake --configfile synthmix_conf.json
+```
 
 ## Advanced
+
+### Options for Synthmix output directories
+
+### Options for bulk data synthesis
