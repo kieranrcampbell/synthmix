@@ -8,6 +8,7 @@
 import glob, os
 import numpy as np
 from synthmix.cm import CreateMix
+import json
 
 ## from http://www.peterbe.com/plog/uniqifiers-benchmark
 def unique(seq, idfun=None): 
@@ -26,8 +27,6 @@ def unique(seq, idfun=None):
        result.append(item)
    return result
 
-# exec(open("config.py").read()) # read in config
-
 
 if not "sc_output_dir" in config.keys():
 	config["sc_output_dir"] = os.path.join(config["base_dir"], "scoutput")
@@ -38,10 +37,13 @@ if not "bulk_output_dir" in config.keys():
 if not "uniform_over_celltypes" in config.keys():
 	config["uniform_over_celltypes"] = True
 if not "sample_mix" in config.keys():
-	config["sample_mix"] = [0.5, 0.5]
+	config["sample_mix"] = 0.5
 if not "seed" in config.keys():
 	config["seed"] = 123
+if not "summary_sheet" in config.keys():
+	config["summary_sheet"] = "summary_sheet.json"
 
+summary_sheet = os.path.join(config["base_dir"], "summary_sheet.json")
 
 #--------------- Bulding bulks from single cell
 
@@ -86,6 +88,23 @@ odirs_cell_level = [[os.path.join(odirs[i], cells[i][j]) for j in range(len(cell
 sc_all_output_files = [os.path.join(outdir, kof) for celltype in odirs_cell_level \ 
 for outdir in celltype for kof in kallisto_output_files] # complete list of all files generated in sc quant
 
+#----- Pick which cells are being taken forward for bulk comprehension
+# use config['sample_mix'] for cell proportion
+cells_per_type = [len(x) for x in cells_fastq_path]
+cells_per_type_to_choose = [int(round(config['sample_mix'] * x)) for x in cells_per_type]
+
+cells_for_bulk_index = [np.random.choice(cells_per_type[i],
+	cells_per_type_to_choose[i], replace = False) for i in np.arange(len(cells_per_type))]
+
+cells_for_bulk_fastq_path = [] # what we're going to hand to cm.py
+for i in range(len(cells_per_type)):
+	cells_for_bulk_fastq_path.append([cells_fastq_path[i][j] for j in cells_for_bulk_index[i]])
+
+cells_for_bulk_dict = {config["scdirs"][i]: cells_for_bulk_fastq_path[i] for i in range(len(cells_per_type))}
+f = open(summary_sheet, "w")
+f.write(json.dumps(cells_for_bulk_dict))
+f.close()
+
 # flatten out structure
 shell_output_file_list = [o for dir in odirs_cell_level for o in dir]
 fastq_strand_1 = [c[0] for type in cells_fastq_path for c in type]
@@ -112,7 +131,7 @@ rule buildbulk:
 		bulk_fastq_files
 
 	run:
-		cm = CreateMix(scdirs, config["mix_ratio"], config["depth"], 
+		cm = CreateMix(cells_for_bulk_fastq_path, config["mix_ratio"], config["depth"], 
 			bulk_file_for_createmix, paired_end = True, 
 			uniform_over_celltypes = config["uniform_over_celltypes"])
 		cm.cellIO()
