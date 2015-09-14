@@ -11,6 +11,8 @@ Synthmix takes single-cell fastq files of different cell types and mixes them in
 
 Synthmix uses Snakemake for workflow control in order to avoid re-building and re-quantifying files that already exist, which requires Python 3. Note: Synthmix currently only supports paired-end reads in `.fastq.gz` format.
 
+Synthmix is designed so that only a proportion of cells are used to create the bulk data while the rest are quantified at the single-cell level. If all cells were used and quantified then typically predictive algorithms would under-report the error rate, since you can effectively 'see inside' the bulk sample.
+
 ## Quick start
 
 To begin, make sure Kallisto is in your path (on linux this can be acheived by `export PATH=/path/to/kallisto/:$PATH`).
@@ -24,7 +26,9 @@ Next, you need to tell Synthmix where your files are and what parameters you'd l
 	"mix_ratio": [0.1, 0.9],
 	"depth": 1000,
 	"transcript_index": "kallisto_files/transcripts.fasta.gz",
-	"kallisto_index": "kallisto_files/transcripts.idx"
+	"kallisto_index": "kallisto_files/transcripts.idx",
+	"sample_mix": [0.5, 0.5],
+	"seed": 123
 }
 ```
 
@@ -35,6 +39,8 @@ This requires the following fields:
 * `depth`: Number of reads in the output bulk file
 * `transcript_index`: The transcriptome index required by Kallisto
 * `kallisto_index`: The pseudoalignment index built by Kallisto (this is created as the first step of Synthmix)
+* `sample_mix`: The proportion of samples to be used for single-cell quantification and the proportion for bulk sample synthesis. Defaults to [0.5, 0.5]
+* `seed`: The random seed to be used to sample cells for bulk/single split. This should be set for your analysis to be reproducible. Defaults to 123.
 
 Then call 
 ```bash

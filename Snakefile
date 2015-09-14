@@ -6,6 +6,7 @@
 # Copyright (c) 2015
 
 import glob, os
+import numpy as np
 from synthmix.cm import CreateMix
 
 ## from http://www.peterbe.com/plog/uniqifiers-benchmark
@@ -34,8 +35,12 @@ if not "bulk_build" in config.keys():
 	config["bulk_build"] = os.path.join(config["base_dir"], "bulkbuild")
 if not "bulk_output_dir" in config.keys():
 	config["bulk_output_dir"] = os.path.join(config["base_dir"], "boutput")
-if not "uniform_over_celltypes"] in config.keys():
+if not "uniform_over_celltypes" in config.keys():
 	config["uniform_over_celltypes"] = True
+if not "sample_mix" in config.keys():
+	config["sample_mix"] = [0.5, 0.5]
+if not "seed" in config.keys():
+	config["seed"] = 123
 
 
 #--------------- Bulding bulks from single cell
