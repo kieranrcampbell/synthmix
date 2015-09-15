@@ -20,14 +20,16 @@ class CreateMix:
 
 	"""
 
-	def __init__(self, cell_dirs, mixing_coefficients, 
+	def __init__(self, cell_fastq_list, mixing_coefficients, 
 		read_depth, output_file, paired_end = True,
 		uniform_over_celltypes = True):
 		""" 
 		Construct a new CreateMix
 
-		@param cell_dirs: List of directories holding the fastq files, where
-		each directory corresponds to one 'type' of file
+		@param cell_fastq_list: A list of depth three: the outer list corresponds
+		to different cell *types*, the second list corresponds to different cells,
+		and the inner list should always be of length 2 and correspond to the different
+		strands (_1 and _2) for synthesis.
 		@param mixing_coefficients: A list or tuple where each entry is the 
 		proportion of reads corresponding to that type
 		@read_depth The read depth of the output file
@@ -39,16 +41,17 @@ class CreateMix:
 		read_depth * mixing_coefficient / n_cells_of_type per cell.
 		"""
 
-		opts = { 'cell_dirs': cell_dirs, 
+		""" NB order always given by cell_fastq_list """ 
+
+		opts = { 'cell_fastq': cell_fastq_list, 
 		'mixing_coefficients': mixing_coefficients, 
 		'read_depth': read_depth, 
 		'output_file': output_file,
 		'paired_end': paired_end, 
 		'uniform_over_celltypes': uniform_over_celltypes }
 		
-		self._check_inputs(cell_dirs, mixing_coefficients)
 
-		self.cell_dirs = cell_dirs
+		self.cell_fastq = cell_fastq_list
 
 		## WARNING: mixing_coefficients explicitly in order of cell_dirs, so
 		## if iterating over, make sure keys are taken from cell_dirs and NOT
@@ -57,6 +60,16 @@ class CreateMix:
 		self.read_depth = read_depth
 		self.output_file = output_file
 		self.paired_end = paired_end
+		self.uniform_over_celltypes = uniform_over_celltypes
+
+
+		## put some numbers on things
+		self.n_cell_types = len(cell_fastq_list)
+		self.cells_per_type = [len(x) for x in cell_fastq_list]
+
+		## check everything is in order
+		self._check_inputs()
+
 
 		""" Dictionary holding list of fastq files for each cell type """
 		self.cell_fastq_dict = {}
@@ -64,41 +77,45 @@ class CreateMix:
 		""" Dictionary holding list of cell *names* for each cell type """
 		self.cell_dict = {}
 
-		""" Dictionary holding list of cell sizes for each type of cell """
-		self.cell_sizes = {}
+		""" List holding list of cell sizes for each type of cell """
+		self.cell_sizes = []
 
-		""" Dictionary holding number of reads coming from each cell """
-		self.reads_per_cell = {}
+		""" List holding number of reads coming from each cell """
+		self.reads_per_cell = []
 
 
-		self.cells_per_type = {}
+		# if self.paired_end:
+		# 	self._find_paired_ends()
+		# 	self.output_file = [self.output_file.replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
+		# else:
+		# 	self._trim_dict()
+		# 	self.output_file = [self.output_file]
+
+		# print('[CreateMix] Finding number of cells')
+		# self._get_ncells()
+		# print('[CreateMix] Finding paired ends')
+		# self._find_paired_ends()
+		# print('[CreateMix] Calculating reads per cell')
+		self._find_reads_per_cell()
 		
 
-		if self.paired_end:
-			self._find_paired_ends()
-			self.output_file = [self.output_file.replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
-		else:
-			self._trim_dict()
-			self.output_file = [self.output_file]
+	def _check_inputs(self):
 
-		print('[CreateMix] Finding number of cells')
-		self._get_ncells()
-		print('[CreateMix] Finding paired ends')
-		self._find_paired_ends()
-		print('[CreateMix] Calculating reads per cell')
-		self._find_reads_per_cell(uniform_over_celltypes)
-		
+		# for d in cell_directories:
+			# assert os.path.exists(d), "Directory %s does not exit" %d
 
-	def _check_inputs(self, cell_directories, mixing_coefficients):
+		assert sum(self.mixing_coefficients) == 1, "Mixing coefficients must sum to 1"
 
-		for d in cell_directories:
-			assert os.path.exists(d), "Directory %s does not exit" %d
-
-		assert sum(mixing_coefficients) == 1, "Mixing coefficients must sum to 1"
-
-		assert len(mixing_coefficients) == len(cell_directories), "Must have same size list of selected files as directories: one cell directory per file type"
+		assert len(self.mixing_coefficients) == self.n_cell_types, "Must have same size list of selected files as directories: one cell directory per file type"
 
 		return		
+
+	def _get_cell_name(self, cell_path):
+		""" given "/path/to/cellname_x.fastq.gz" return "cellname" """
+		s = cell_path.split("/")[-1]
+		s = s.replace(".fastq.gz", "")
+		s = s.replace("_1", "").replace("_2", "")		
+		return s
 
 
 	def _get_ncells(self):
@@ -137,7 +154,7 @@ class CreateMix:
 				nLines = nLines + 1
 		return nLines
 
-	def _find_reads_per_cell(self, uniform_over_celltypes):
+	def _find_reads_per_cell(self):
 		D = self.read_depth
 
 		"""
@@ -149,7 +166,7 @@ class CreateMix:
 
 		reads_per_cell_type = D * np.array(self.mixing_coefficients)
 
-		if uniform_over_celltypes:
+		if self.uniform_over_celltypes:
 			"""
 			then reads for cell i given R_j reads for cell type j is
 			s_{ij} * R_j / (\sum_j s_{ij}) 
@@ -158,23 +175,35 @@ class CreateMix:
 			"""
 
 			# need to count lines in fastq files
-			for (dir, cells) in self.cell_dict.items():
-				sizes = []
-				for cell in cells:
-					if self.paired_end:
-						cell = cell + "_1.fastq.gz"
-					else:
-						cell = cell + ".fastq.gz"
+			# for (dir, cells) in self.cell_dict.items():
+			# 	sizes = []
+			# 	for cell in cells:
+			# 		if self.paired_end:
+			# 			cell = cell + "_1.fastq.gz"
+			# 		else:
+			# 			cell = cell + ".fastq.gz"
 
-					sizes.append(self.__countlines(os.path.join(dir, cell)))
-				self.cell_sizes[dir] = sizes
+			# 		sizes.append(self.__countlines(os.path.join(dir, cell)))
+			# 	self.cell_sizes[dir] = sizes
+
+
+			# NEW
+			for cell_type in self.cell_fastq:
+				sizes = []
+				for cell in cell_type:
+					if self.paired_end: # it's a list!
+						fastq_path = cell[0]
+					else:
+						fastq_path = cell
+					sizes.append(self.__countlines(fastq_path))
+				self.cell_sizes.append(sizes)
 
 			
 			Rj = D * np.array(self.mixing_coefficients)
-			for (j, directory) in enumerate(self.cell_dirs):
-				s = np.array(self.cell_sizes[directory])
+			for i in range(self.n_cell_types):
+				s = np.array(self.cell_sizes[i])
 				sprop = s / float(s.sum())
-				self.reads_per_cell[directory] = np.round(Rj[j] * sprop)
+				self.reads_per_cell.append(np.round(Rj[i] * sprop))
 
 
 		else:
@@ -183,10 +212,10 @@ class CreateMix:
 			g_j D / n_j
 			for n_j cells of type j
 			"""
-			for (i, directory) in enumerate(self.cell_dirs):
-				self.reads_per_cell[directory] = np.ones(self.cells_per_type[directory]) * \
+			for i in range(self.n_cell_types):
+				self.reads_per_cell.append( np.ones(self.cells_per_type[i]) * \
 				reads_per_cell_type[i]  / \
-				float(self.cells_per_type[directory])
+				float(self.cells_per_type[i]) )
 
 
 
