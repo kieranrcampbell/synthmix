@@ -6,6 +6,6 @@
 	"mix_ratio": [0.1, 0.9],
 	"depth": 1000,
 	"transcript_index": "kallisto_files/transcripts.fasta.gz",
-	"sample_mix": [0.5, 0.5],
+	"sample_mix": 0.5,
 	"seed": 123
 }

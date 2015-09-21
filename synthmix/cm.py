@@ -43,12 +43,7 @@ class CreateMix:
 
 		""" NB order always given by cell_fastq_list """ 
 
-		opts = { 'cell_fastq': cell_fastq_list, 
-		'mixing_coefficients': mixing_coefficients, 
-		'read_depth': read_depth, 
-		'output_file': output_file,
-		'paired_end': paired_end, 
-		'uniform_over_celltypes': uniform_over_celltypes }
+
 		
 
 		self.cell_fastq = cell_fastq_list
@@ -71,11 +66,11 @@ class CreateMix:
 		self._check_inputs()
 
 
-		""" Dictionary holding list of fastq files for each cell type """
-		self.cell_fastq_dict = {}
+		# """ Dictionary holding list of fastq files for each cell type """
+		# self.cell_fastq_dict = {}
 
-		""" Dictionary holding list of cell *names* for each cell type """
-		self.cell_dict = {}
+		# """ Dictionary holding list of cell *names* for each cell type """
+		# self.cell_dict = {}
 
 		""" List holding list of cell sizes for each type of cell """
 		self.cell_sizes = []
@@ -84,18 +79,24 @@ class CreateMix:
 		self.reads_per_cell = []
 
 
-		# if self.paired_end:
-		# 	self._find_paired_ends()
-		# 	self.output_file = [self.output_file.replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
-		# else:
-		# 	self._trim_dict()
-		# 	self.output_file = [self.output_file]
+		if self.paired_end:
+			# self._find_paired_ends()
+			self.output_file = [self.output_file.replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
+		else:
+			# self._trim_dict() # what is this supposed to do?
+			self.output_file = [self.output_file]
 
-		# print('[CreateMix] Finding number of cells')
-		# self._get_ncells()
-		# print('[CreateMix] Finding paired ends')
-		# self._find_paired_ends()
-		# print('[CreateMix] Calculating reads per cell')
+		self.opts = { 'cell_fastq': cell_fastq_list, 
+		'mixing_coefficients': mixing_coefficients, 
+		'read_depth': read_depth, 
+		'output_file': output_file,
+		'paired_end': paired_end, 
+		'uniform_over_celltypes': uniform_over_celltypes,
+		'n_cell_types': self.n_cell_types,
+		'cells_per_type': self.cells_per_type,
+		'cell_sizes': self.cell_sizes}
+
+
 		self._find_reads_per_cell()
 		
 
@@ -118,36 +119,37 @@ class CreateMix:
 		return s
 
 
-	def _get_ncells(self):
-		""" Crawls each directory counting the number of fastq files to work 
-		out how many reads per cell we should take (at random) """
+	# def _get_ncells(self):
+	# 	""" Crawls each directory counting the number of fastq files to work 
+	# 	out how many reads per cell we should take (at random) """
 
-		for directory in self.cell_dirs:
-			self.cell_fastq_dict[directory] = [f for f in os.listdir(directory) if f.endswith(".fastq.gz")]
-			self.cells_per_type[directory] = len(self.cell_fastq_dict[directory])
+	# 	for directory in self.cell_dirs:
+	# 		self.cell_fastq_dict[directory] = [f for f in os.listdir(directory) if f.endswith(".fastq.gz")]
+	# 		self.cells_per_type[directory] = len(self.cell_fastq_dict[directory])
 
-		if self.paired_end:
-			assert np.any(np.array(list(self.cells_per_type.values())) % 2 == 0), "Paired end reads must have even number of fastq.gz files"
-			for(dir, n_cells) in self.cells_per_type.items():
-				self.cells_per_type[dir] = n_cells / 2			
+	# 	if self.paired_end:
+	# 		assert np.any(np.array(list(self.cells_per_type.values())) % 2 == 0), "Paired end reads must have even number of fastq.gz files"
+	# 		for(dir, n_cells) in self.cells_per_type.items():
+	# 			self.cells_per_type[dir] = n_cells / 2			
 
 
-	def  _find_paired_ends(self):
-		""" Iterates over self.cell_fastq_dict and sorts files into pairs based on _1 and _2 """
+	# def  _find_paired_ends(self):
+	# 	""" Iterates over self.cell_fastq_dict and sorts files into pairs based on _1 and _2 """
 
-		for celltype, fastq_list in self.cell_fastq_dict.items():
-			forward_strand = [x for x in fastq_list if "_1" in x]
-			reverse_strand = [x for x in fastq_list if "_2" in x]
+	# 	for celltype, fastq_list in self.cell_fastq_dict.items():
+	# 		forward_strand = [x for x in fastq_list if "_1" in x]
+	# 		reverse_strand = [x for x in fastq_list if "_2" in x]
 
-			forward_strand_names = sorted([x.replace("_1.fastq.gz","") for x in forward_strand])
-			reverse_strand_names = sorted([x.replace("_2.fastq.gz","") for x in reverse_strand])
+	# 		forward_strand_names = sorted([x.replace("_1.fastq.gz","") for x in forward_strand])
+	# 		reverse_strand_names = sorted([x.replace("_2.fastq.gz","") for x in reverse_strand])
 
-			assert(forward_strand_names == reverse_strand_names), "Paired end reads must have matching names"
-			self.cell_dict[celltype] = forward_strand_names			
+	# 		assert(forward_strand_names == reverse_strand_names), "Paired end reads must have matching names"
+	# 		self.cell_dict[celltype] = forward_strand_names			
 
 
 	def __countlines(self, path):
-		print("Counting lines of " + path)
+		print("[CreateMix] Counting lines")
+		# print("Counting lines of " + path)
 		nLines = 0
 		with gzip.open(path) as gh:
 			for line in gh:
@@ -220,26 +222,29 @@ class CreateMix:
 
 
 	def cellIO(self):
-		print("[CreateMix]  Writing files")
+		print("[CreateMix] Writing files")
+		print([f.split("/")[-1] for f in self.output_file])
 		outfilestreams = [gzip.open(f,'wb') for f in self.output_file]
 
-		for cell_type in self.cell_dirs:
-			""" iterate over each type of cell """
-			## reads_per_cell = self.assigned_reads_per_cell[i] # select reads_per_cell from 
-			for (i, cell) in enumerate(self.cell_dict[cell_type]):
-				reads_per_cell = self.reads_per_cell[cell_type][i]
-				self._write_one_cell(cell_type, cell, reads_per_cell, outfilestreams)
+		for i in range(len(self.cell_fastq)):  # iterate over each type of cell
+			for j in range(len(self.cell_fastq[i])): # iterate over each cell
+				nreads = self.reads_per_cell[i][j]
+				""" hand off to read one cell with input files defined in 
+				self.cell_fastq[i][j] and a predetermined number of reads nreads
+				to one (single) or two (paired-end) output files in outfilestreams """
+				self._write_one_cell(self.cell_fastq[i][j], nreads, outfilestreams)
+				#self._write_one_cell(cell_type, cell, reads_per_cell, outfilestreams)
 
 
 		[f.close() for f in outfilestreams]
 		print("[CreateMix] Done")
 
-	def _write_one_cell(self, directory, cell_file, reads_per_cell, outfilestream):
+	def _write_one_cell(self, input_fastqs, nreads, outfilestream):
 		""" select reads_per_cell reads at random from cell file in directory, and output
 		to outfilestream """
 		if self.paired_end:
 			#print "Reading %s" % cell_file
-			fs = [gzip.open(os.path.join(directory, f),'rb') for f in [cell_file + x + ".fastq.gz" for x in ("_1","_2")]]
+			fs = [gzip.open(f,'rb') for f in input_fastqs]
 			
 			lines = [f.readlines() for f in fs]
 			n_lines = [len(l) for l in lines]
@@ -251,7 +256,7 @@ class CreateMix:
 
 			""" now select reads_per_cell from n_lines """
 
-			chosen_lines = np.random.choice(int(n_lines / 4),  int(reads_per_cell)) * 4
+			chosen_lines = np.random.choice(int(n_lines / 4),  int(nreads)) * 4
 
 			for l in chosen_lines:
 				[outfilestream[i].writelines(lines[i][l:(l+4)]) for i in (0,1)]
@@ -264,11 +269,9 @@ class CreateMix:
 
 
 	def print_all(self):
-		print(self.cell_dict)
-		print(self.cell_fastq_dict)
-		print(self.cell_sizes)
-		print(self.reads_per_cell)
-		print(self.cells_per_type)
+		print(self.opts)
+
+
 
 
 
