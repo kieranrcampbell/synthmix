@@ -93,6 +93,7 @@ for outdir in celltype for kof in kallisto_output_files] # complete list of all 
 cells_per_type = [len(x) for x in cells_fastq_path]
 cells_per_type_to_choose = [int(round(config['sample_mix'] * x)) for x in cells_per_type]
 
+np.random.seed(config["seed"])
 cells_for_bulk_index = [np.random.choice(cells_per_type[i],
 	cells_per_type_to_choose[i], replace = False) for i in np.arange(len(cells_per_type))]
 
@@ -113,6 +114,7 @@ fastq_strand_2 = [c[1] for type in cells_fastq_path for c in type]
 #----- Snakemake stuff starts here
 
 INDEX = config["kallisto_index"]
+
 
 rule buildkallistoindex:
 	input:
