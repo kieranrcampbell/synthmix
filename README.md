@@ -34,14 +34,18 @@ Next, you need to tell Synthmix where your files are and what parameters you'd l
 
 This requires the following fields:
 * `base_dir`: Parent directory of where the single-cell fastq files are along with where we'll put all subsequent files
-* `scdirs`: Child directories of `base_dir`. Each of these must contain paired end `.fastq.gz` files
+* `scdirs`: Child directories of `base_dir`. Each of these must contain paired end `.fastq.gz` files. Each directory corresponds to a particular cell type.
 * `mix_ratio`: A numeric list containing the relative abundances of each cell type (where the order matches that of `scdirs`). Note that this must sum to 1 otherwise an error is thrown.
-* `depth`: Number of reads in the output bulk file
+* `depth`: Number of reads in the output bulk file. Should be a list of number of jobs.
 * `transcript_index`: The transcriptome index required by Kallisto
 * `kallisto_index`: The pseudoalignment index built by Kallisto (this is created as the first step of Synthmix)
-* `sample_mix`: The proportion of samples to be used for single-cell quantification. Defaults to 0.5.\\\\\\\
-* `seed`: The random seed to be used to sample cells for bulk/single split. This should be set for your analysis to be reproducible. Defaults to 123.
-* `summary_sheet`: Json saying which files were witheld and which were taken forward for bulk analysis.
+* `sample_mix`: The proportion of samples to be used for single-cell quantification. Defaults to 0.5. *Optional*
+* `seed`: The random seed to be used to sample cells for bulk/single split. This should be set for your analysis to be reproducible. Defaults to 123. *Optional*
+* `summary_sheet`: Json saying which files were witheld and which were taken forward for bulk analysis. *Optional*
+* `sc_output_dir`: Where single-cell quantification by Kallisto is stored. Defaults to `os.path.join(base_dir, "scoutput")`. *Optional*
+* `bulk_build`: Directory for mixed fastq files. Defaults to `os.path.join(base_dir, "bulkbuild")`. *Optional*
+* `bulk_output_dir`: Where bulk quantification by Kallisto is stored. Defaults to `os.path.join(base_dir, "boutput")`. *Optional*
+* `uniform_over_celltypes`: Logical. If True, the number of reads per cell type is taken uniformly across all fastq files for that cell type, so if a given cell has more reads then it will be sampled proportional to the number of reads. If False, then a set number of reads is sampled from each cell by taking read_depth * mixing_coefficient / n_cells_of_type per cell. *Optional*
 
 Then call 
 ```bash
