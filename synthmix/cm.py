@@ -17,11 +17,10 @@ import logging
 
 class CreateMix:
 	""" Take single-cell data and create synthetic bulk data
-
 	"""
 
 	def __init__(self, cell_fastq_list, mixing_coefficients, 
-		read_depth, output_file, paired_end = True,
+		read_depth, output_files, paired_end = True,
 		uniform_over_celltypes = True):
 		""" 
 		Construct a new CreateMix
@@ -30,9 +29,11 @@ class CreateMix:
 		to different cell *types*, the second list corresponds to different cells,
 		and the inner list should always be of length 2 and correspond to the different
 		strands (_1 and _2) for synthesis.
-		@param mixing_coefficients: A list or tuple where each entry is the 
-		proportion of reads corresponding to that type
-		@read_depth The read depth of the output file
+		@param mixing_coefficients: A list of lists - each entry corresponds to a 'job' and 
+		each 'job' within that will be a list of coefficients
+		@read_depth A list with a read depth for each 'job'
+		@output_files A list of length(njobs) where each entry is a list of length 2 with
+		forward and reverse strand info		
 		@paired_end Is the input & output data paired end?
 		@uniform_over_celltypes Logical. If True, the number of reads per cell type
 		is taken uniformly across all fastq files for that cell type, so if a given cell has
@@ -43,9 +44,6 @@ class CreateMix:
 
 		""" NB order always given by cell_fastq_list """ 
 
-
-		
-
 		self.cell_fastq = cell_fastq_list
 
 		## WARNING: mixing_coefficients explicitly in order of cell_dirs, so
@@ -53,10 +51,12 @@ class CreateMix:
 		## some_dict.keys()
 		self.mixing_coefficients = mixing_coefficients
 		self.read_depth = read_depth
-		self.output_file = output_file
+		self.output_files = output_files
 		self.paired_end = paired_end
 		self.uniform_over_celltypes = uniform_over_celltypes
+		self.njobs = len(mixing_coefficients)
 
+		print("[CreateMix] Total jobs: " + str(self.njobs))
 
 		## put some numbers on things
 		self.n_cell_types = len(cell_fastq_list)
@@ -75,21 +75,22 @@ class CreateMix:
 		""" List holding list of cell sizes for each type of cell """
 		self.cell_sizes = []
 
-		""" List holding number of reads coming from each cell """
+		""" List holding number of reads coming from each cell *for each job* """
 		self.reads_per_cell = []
 
 
-		if self.paired_end:
-			# self._find_paired_ends()
-			self.output_file = [self.output_file.replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
-		else:
-			# self._trim_dict() # what is this supposed to do?
-			self.output_file = [self.output_file]
+		# if self.paired_end:
+		# 	# self._find_paired_ends()
+		# 	for i in range(self.njobs):
+		# 		self.output_files[i] = [self.output_files[i].replace(".fastq.gz","") + x + ".fastq.gz" for x in ('_1','_2')]
+		# else:
+		# 	# self._trim_dict() # what is this supposed to do?
+		# 	self.output_file = [self.output_file]
 
 		self.opts = { 'cell_fastq': cell_fastq_list, 
 		'mixing_coefficients': mixing_coefficients, 
 		'read_depth': read_depth, 
-		'output_file': output_file,
+		'output_files': output_files,
 		'paired_end': paired_end, 
 		'uniform_over_celltypes': uniform_over_celltypes,
 		'n_cell_types': self.n_cell_types,
@@ -105,18 +106,25 @@ class CreateMix:
 		# for d in cell_directories:
 			# assert os.path.exists(d), "Directory %s does not exit" %d
 
-		assert sum(self.mixing_coefficients) == 1, "Mixing coefficients must sum to 1"
+		""" assert number of jobs is consistent """
+		assert self.njobs == len(self.output_files), "Must have mixing coefficient and output file for each job "
+		assert len(self.read_depth) == self.njobs, "Must have depth for each job" # TODO change this
 
-		assert len(self.mixing_coefficients) == self.n_cell_types, "Must have same size list of selected files as directories: one cell directory per file type"
+
+		for j in range(self.njobs):
+			assert sum(self.mixing_coefficients[j]) == 1, "Mixing coefficients must sum to 1"
+			assert len(self.mixing_coefficients[j]) == self.n_cell_types, "Must have same size list of selected files as directories: one cell directory per file type"
+
+		self._check_output_consistency()
 
 		return		
 
-	def _get_cell_name(self, cell_path):
-		""" given "/path/to/cellname_x.fastq.gz" return "cellname" """
-		s = cell_path.split("/")[-1]
-		s = s.replace(".fastq.gz", "")
-		s = s.replace("_1", "").replace("_2", "")		
-		return s
+	# def _get_cell_name(self, cell_path):
+	# 	""" given "/path/to/cellname_x.fastq.gz" return "cellname" """
+	# 	s = cell_path.split("/")[-1]
+	# 	s = s.replace(".fastq.gz", "")
+	# 	s = s.replace("_1", "").replace("_2", "")		
+	# 	return s
 
 
 	# def _get_ncells(self):
@@ -157,7 +165,7 @@ class CreateMix:
 		return nLines
 
 	def _find_reads_per_cell(self):
-		D = self.read_depth
+		
 
 		"""
 		For mixing ratios g1, g2, ..., gn, we want g1D, g2D etc
@@ -166,7 +174,7 @@ class CreateMix:
 		each cell 
 		"""
 
-		reads_per_cell_type = D * np.array(self.mixing_coefficients)
+
 
 		if self.uniform_over_celltypes:
 			"""
@@ -200,12 +208,15 @@ class CreateMix:
 					sizes.append(self.__countlines(fastq_path))
 				self.cell_sizes.append(sizes)
 
-			
-			Rj = D * np.array(self.mixing_coefficients)
-			for i in range(self.n_cell_types):
-				s = np.array(self.cell_sizes[i])
-				sprop = s / float(s.sum())
-				self.reads_per_cell.append(np.round(Rj[i] * sprop))
+			for job in range(self.njobs):
+				D = self.read_depth[job]
+				Rj = D * np.array(self.mixing_coefficients[job])
+				reads_per_cell_this_job = []
+				for j in range(self.n_cell_types):
+					s = np.array(self.cell_sizes[j])
+					sprop = s / float(s.sum())
+					reads_per_cell_this_job.append(np.round(Rj[j] * sprop))
+				self.reads_per_cell.append(reads_per_cell_this_job)
 
 
 		else:
@@ -214,54 +225,68 @@ class CreateMix:
 			g_j D / n_j
 			for n_j cells of type j
 			"""
-			for i in range(self.n_cell_types):
-				self.reads_per_cell.append( np.ones(self.cells_per_type[i]) * \
-				reads_per_cell_type[i]  / \
-				float(self.cells_per_type[i]) )
+			for job in range(self.njobs):
+				reads_per_cell_type = D[j] * np.array(self.mixing_coefficients[j])
+				reads_per_cell_this_job = []
+				for j in range(self.n_cell_types):
+					reads_per_cell_this_job.append( np.ones(self.cells_per_type[j]) * \
+					reads_per_cell_type[j]  / \
+					float(self.cells_per_type[j]) )
+				self.reads_per_cell.append(reads_per_cell_this_job)
 
-
+	def _check_output_consistency(self):
+		""" checks _1 & _2.fastq.gz are present in output files correctly """ 
+		for job in range(len(self.output_files)):
+			assert "_1.fastq.gz" in self.output_files[job][0], "Output missing first strand"
+			assert "_2.fastq.gz" in self.output_files[job][1], "Output missing second strand"
 
 	def cellIO(self):
 		print("[CreateMix] Writing files")
-		print([f.split("/")[-1] for f in self.output_file])
-		outfilestreams = [gzip.open(f,'wb') for f in self.output_file]
 
-		for i in range(len(self.cell_fastq)):  # iterate over each type of cell
-			for j in range(len(self.cell_fastq[i])): # iterate over each cell
-				nreads = self.reads_per_cell[i][j]
+		outfilestreams = [[gzip.open(f,'wb') for f in job] for job in self.output_files]
+
+		for j in range(len(self.cell_fastq)):  # iterate over each type of cell
+			for i in range(len(self.cell_fastq[j])): # iterate over each cell
 				""" hand off to read one cell with input files defined in 
 				self.cell_fastq[i][j] and a predetermined number of reads nreads
 				to one (single) or two (paired-end) output files in outfilestreams """
-				self._write_one_cell(self.cell_fastq[i][j], nreads, outfilestreams)
+				self._write_one_cell(j, i, outfilestreams)
 				#self._write_one_cell(cell_type, cell, reads_per_cell, outfilestreams)
 
 
-		[f.close() for f in outfilestreams]
+		for job in outfilestreams:
+			for f in job:
+				f.close()
+
 		print("[CreateMix] Done")
 
-	def _write_one_cell(self, input_fastqs, nreads, outfilestream):
-		""" select reads_per_cell reads at random from cell file in directory, and output
-		to outfilestream """
+	def _write_one_cell(self, j, i, outfilestreams):
+		""" 
+		This function deals with one cell (cell type = j, cell = i) and does IO for each job.
+		The logic is we only read each file once saving time.
+		"""
 		if self.paired_end:
 			#print "Reading %s" % cell_file
-			fs = [gzip.open(f,'rb') for f in input_fastqs]
+			fs = [gzip.open(f,'rb') for f in self.cell_fastq[j][i]]
 			
 			lines = [f.readlines() for f in fs]
+			[f.close() for f in fs]
 			n_lines = [len(l) for l in lines]
 
 			assert n_lines[0] == n_lines[1], "Paired end reads must have equal number of lines in _1 and _2 files"
 			n_lines = n_lines[0]
 			assert n_lines % 4 == 0, "Number of lines in %s  and %s is not a multiple of 4" % cell_file
 			
-
-			""" now select reads_per_cell from n_lines """
-
-			chosen_lines = np.random.choice(int(n_lines / 4),  int(nreads)) * 4
-
-			for l in chosen_lines:
-				[outfilestream[i].writelines(lines[i][l:(l+4)]) for i in (0,1)]
-			lines = None
-			[f.close() for f in fs]
+			for job in range(self.njobs):
+				outfilestream = outfilestreams[job]
+				#print(job)
+				#print(outfilestream)
+				nreads = self.reads_per_cell[job][j][i]
+				chosen_lines = np.random.choice(int(n_lines / 4),  int(nreads)) * 4
+				# print(chosen_lines)
+				for l in chosen_lines:
+					[outfilestream[k].writelines(lines[k][l:(l+4)]) for k in (0,1)]
+			# lines = None
 
 		else:
 			print("Non-paired-end currently not supported")

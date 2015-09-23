@@ -23,11 +23,11 @@ Next, you need to tell Synthmix where your files are and what parameters you'd l
 {
 	"base_dir": "/path/to/project",
 	"scdirs": ["epithelial","stromal"],
-	"mix_ratio": [0.1, 0.9],
-	"depth": 1000,
+	"mix_ratio": [[0.1, 0.9], [0.2, 0.8]],
+	"depth": [1000, 1000],
 	"transcript_index": "kallisto_files/transcripts.fasta.gz",
 	"kallisto_index": "kallisto_files/transcripts.idx",
-	"sample_mix": 0.5,
+	"bulk_proportion": 0.5,
 	"seed": 123
 }
 ```
@@ -39,7 +39,7 @@ This requires the following fields:
 * `depth`: Number of reads in the output bulk file. Should be a list of number of jobs.
 * `transcript_index`: The transcriptome index required by Kallisto
 * `kallisto_index`: The pseudoalignment index built by Kallisto (this is created as the first step of Synthmix)
-* `sample_mix`: The proportion of samples to be used for single-cell quantification. Defaults to 0.5. *Optional*
+* `bulk_proportion`: The proportion of cells to be mixed for bulk fastq generation. Defaults to 0.5. *Optional*
 * `seed`: The random seed to be used to sample cells for bulk/single split. This should be set for your analysis to be reproducible. Defaults to 123. *Optional*
 * `summary_sheet`: Json saying which files were witheld and which were taken forward for bulk analysis. *Optional*
 * `sc_output_dir`: Where single-cell quantification by Kallisto is stored. Defaults to `os.path.join(base_dir, "scoutput")`. *Optional*

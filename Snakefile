@@ -36,8 +36,8 @@ if not "bulk_output_dir" in config.keys():
 	config["bulk_output_dir"] = os.path.join(config["base_dir"], "boutput")
 if not "uniform_over_celltypes" in config.keys():
 	config["uniform_over_celltypes"] = True
-if not "sample_mix" in config.keys():
-	config["sample_mix"] = 0.5
+if not "bulk_proportion" in config.keys():
+	config["bulk_proportion"] = 0.5
 if not "seed" in config.keys():
 	config["seed"] = 123
 if not "summary_sheet" in config.keys():
@@ -49,14 +49,21 @@ summary_sheet = os.path.join(config["base_dir"], "summary_sheet.json")
 
 kallisto_output_files = ['abundance.h5', 'abundance.txt', 'run_info.json']
 
-bulk_name = ""
-if "prefix" in config.keys():
-	bulk_name = config["prefix"]
+njobs = len(config["mix_ratio"])
+# @assert len(config["depth"]) == njobs, "Specify depth for each job"
 
-bulk_name = str(config["depth"]) + "_"
-bulk_name += '_'.join([str(m) for m in config["mix_ratio"]]).replace('.','')
-bulk_file_for_createmix = os.path.join(config["bulk_build"], "bulk" + bulk_name + ".fastq.gz")
-bulk_fastq_files = [bulk_file_for_createmix.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
+
+bulk_names = ["" for i in range(njobs)]
+bulk_fastq_files = ["" for i in range(njobs)] ## complete list of all files for bulk
+
+if "prefix" in config.keys():
+	bulk_names = [config["prefix"] + "_" for i in range(njobs)]
+
+for i in range(njobs):
+	bulk_names[i] += str(config["depth"][i]) + "_"
+	bulk_names[i] += '_'.join([str(m) for m in config["mix_ratio"][i]]).replace('.','')
+	b = os.path.join(config["bulk_build"], "bulk" + bulk_names[i] + ".fastq.gz")
+	bulk_fastq_files[i] = [b.replace(".fastq", "_" + str(i + 1) + ".fastq") for i in range(2)]
 
 # complete list of all single-cell fastqs - output of build bulk and input to sc quant
 
@@ -65,8 +72,8 @@ cells_full_path = [f for dir in scdirs for f in glob.glob(dir + '/*_*.fastq.gz')
 
 #--------------- Bulk Quantification
 
-bulk_quant_dir = os.path.join(config["bulk_output_dir"], bulk_name) # bulk estimate directory
-bulk_quant_files = [os.path.join(bulk_quant_dir, kof) for kof in kallisto_output_files] # bulk estimate files
+bulk_quant_dirs = [os.path.join(config["bulk_output_dir"], bn) for bn in bulk_names] # bulk estimate directory
+bulk_quant_files = [os.path.join(bqd, kof) for kof in kallisto_output_files for bqd in bulk_quant_dirs] # bulk estimate files
 
 
 #--------------- SIngle-cell quantification
@@ -89,9 +96,9 @@ sc_all_output_files = [os.path.join(outdir, kof) for celltype in odirs_cell_leve
 for outdir in celltype for kof in kallisto_output_files] # complete list of all files generated in sc quant
 
 #----- Pick which cells are being taken forward for bulk comprehension
-# use config['sample_mix'] for cell proportion
+# use config['bulk_proportion'] for cell proportion
 cells_per_type = [len(x) for x in cells_fastq_path]
-cells_per_type_to_choose = [int(round(config['sample_mix'] * x)) for x in cells_per_type]
+cells_per_type_to_choose = [int(round(config['bulk_proportion'] * x)) for x in cells_per_type]
 
 np.random.seed(config["seed"])
 cells_for_bulk_index = [np.random.choice(cells_per_type[i],
@@ -134,7 +141,7 @@ rule buildbulk:
 
 	run:
 		cm = CreateMix(cells_for_bulk_fastq_path, config["mix_ratio"], config["depth"], 
-			bulk_file_for_createmix, paired_end = True, 
+			bulk_fastq_files, paired_end = True, 
 			uniform_over_celltypes = config["uniform_over_celltypes"])
 		cm.cellIO()
 
@@ -153,8 +160,11 @@ rule quantifybulk:
 		bulk_fastq_files
 	output:
 		bulk_quant_files
-	shell:
-		"kallisto quant -i {INDEX} -o {bulk_quant_dir} {bulk_fastq_files[0]} {bulk_fastq_files[1]}"
+	run:
+		for job in range(njobs):
+			bqd = bulk_quant_dirs[job]
+			bff = bulk_fastq_files[job]
+			shell("kallisto quant -i {INDEX} -o {bqd} {bff[0]} {bff[1]}")
 
 rule all:
 	input:
