@@ -7,5 +7,6 @@
 	"depth": 1000,
 	"transcript_index": "kallisto_files/transcripts.fasta.gz",
 	"sample_mix": 0.5,
-	"seed": 123
+	"seed": 123,
+	"kallisto": "/net/isi-scratch/kieran/tools/kallisto_linux-v0.42.1/kallisto"
 }

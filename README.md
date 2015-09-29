@@ -46,6 +46,7 @@ This requires the following fields:
 * `bulk_build`: Directory for mixed fastq files. Defaults to `os.path.join(base_dir, "bulkbuild")`. *Optional*
 * `bulk_output_dir`: Where bulk quantification by Kallisto is stored. Defaults to `os.path.join(base_dir, "boutput")`. *Optional*
 * `uniform_over_celltypes`: Logical. If True, the number of reads per cell type is taken uniformly across all fastq files for that cell type, so if a given cell has more reads then it will be sampled proportional to the number of reads. If False, then a set number of reads is sampled from each cell by taking read_depth * mixing_coefficient / n_cells_of_type per cell. *Optional*
+* `replications`: How many replications of each condition (read depth, mixing coefficients)? Default 1 *optional*
 
 Then call 
 ```bash
